@@ -1,0 +1,5 @@
+services:
+  power_price:
+    build: .
+    ports:
+      - "8050:8050"
