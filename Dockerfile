@@ -12,9 +12,12 @@ RUN pip install -r /requirements.txt
 # Copy app folder to app folder in container
 COPY ./src/ /app/
 COPY secrets.py /app/
+COPY state.toml /app/
 
 # Changing to non-root user
 RUN useradd -m appUser
+RUN chown -R appUser:appUser /app
+RUN chmod 755 /app
 USER appUser
 
 # Run locally

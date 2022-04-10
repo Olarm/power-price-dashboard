@@ -6,7 +6,8 @@ from dash import Dash, html, dcc, Input, Output
 import plotly.express as px
 import pandas as pd
 import datetime
-
+import toml
+from collections import namedtuple
 from main import get_day_ahead
 
 app = Dash(__name__,)
@@ -17,72 +18,93 @@ colors = {
     'text': '#7FDBFF'
 }
 
-zones = ["NO_2", "NO_3"]
+def get_zones():
+    with open('state.toml', 'r') as f:
+        states = toml.load(f)
 
-df = get_day_ahead(zones)
+    Zones = namedtuple("Zones", states["zones"])
+    zones = Zones(**states["zones"])
+    return zones
 
-#fig = go.Figure()
-#fig.add_trace(go.Line(df, x="time", y="NO_2" + 25, name="hv", line_shape='hv'))
-#fig.add_trace(go.Line(df, x="time", y="NO_3" + 25, name="hv", line_shape='hv'))
-
-
-
-#fig = px.line(df, x="year", y="lifeExp", color="country", title="layout.hovermode='x'")
-#fig.update_traces(mode="markers+lines", hovertemplate=None)
-#fig.update_layout(hovermode="x")
-
-
-#fig.update_layout(
-#    plot_bgcolor=colors['background'],
-#    paper_bgcolor=colors['background'],
-#    font_color=colors['text']
-#)
-
-#app.layout = html.Div(children=[
-#    html.H1(children='Hello Dash'),
-#
-#    html.Div(children='''
-#        Dash: A web application framework for your data.
-#    '''),
-#
-#    dcc.Graph(
-#        id='example-graph',
-#        figure=fig
-#    )
-#])
+zones = get_zones()
 
 app.layout = html.Div(style={}, children=[
-
-
-    html.Div(children='Day-ahead power price.', style={
-        'textAlign': 'center'
-    }),
-
-    dcc.Graph(
-        id='power-plot',
+    html.Div(
+        children=[
+            'Day-ahead power price.',
+            dcc.Graph(
+                id='power-plot',
+            ),
+            dcc.Interval(
+                id='now-line',
+                interval=1000, # in milliseconds
+                n_intervals=0
+            ),
+            dcc.Checklist(
+                zones.all_zones,
+                zones.default_zones,
+                id="zones"
+            )
+        ],
+        style={'textAlign': 'center', 'display': 'inline-block', "width": "70vw"}
     ),
-    dcc.Interval(
-        id='now-line',
-        interval=1000, # in milliseconds
-        n_intervals=0
-    )
+    html.Div(
+        children=[
+            html.Label('Dropdown'),
+            dcc.Dropdown(['New York City', 'Montréal', 'San Francisco'], 'Montréal'),
+
+            html.Br(),
+            html.Label('Multi-Select Dropdown'),
+            dcc.Dropdown(['New York City', 'Montréal', 'San Francisco'],
+                         ['Montréal', 'San Francisco'],
+                         multi=True),
+
+            html.Br(),
+            html.Label('Radio Items'),
+            dcc.RadioItems(['New York City', 'Montréal', 'San Francisco'], 'Montréal'),
+        ],
+        style={'display': 'inline-block'}
+    ),
 ])
+
 
 @app.callback(
     Output("power-plot", "figure"), [Input("now-line", "n_intervals")]
 )
 def update_now_line(interval):
-    global df
+    zones = get_zones()
+    try:
+        df = pd.read_csv("zone_prices.csv")
+    except FileNotFoundError:
+        df = get_day_ahead(zones.all_zones)
+        df.to_csv("zone_prices.csv")
+
     ts = pd.Timestamp.now(tz="Europe/Oslo")
     ts_prev = ts.replace(microsecond=0, second=0, minute=0)
     ts_next = ts_prev + datetime.timedelta(hours=1)
 
     if ts.minute == 0 and ts.second == 0:
-        df = get_day_ahead(zones)
+        df = get_day_ahead(zones.all_zones)
+        df.to_csv("zone_prices.csv")
 
-    fig = px.line(df, x="time", y="price", color="zone", line_shape='hv')
+    temp_df = df[df["zone"].isin(zones.chosen_zones)]
+
+    fig = px.line(temp_df, x="time", y="price", color="zone", line_shape='hv')
     fig.add_vrect(x0=ts_prev, x1=ts_next,
               fillcolor="blue", opacity=0.25, line_width=0)
     fig.update_layout(hovermode="x")
 
     return fig
+
+
+@app.callback(
+    Output("zones", "value"),
+    Input("zones", "value")
+)
+def update_zones(zones_selected):
+    with open('state.toml', 'r') as f:
+        states = toml.load(f)
+        states["zones"]["chosen_zones"] = zones_selected
+    with open('state.toml', 'w') as f:
+        toml.dump(states, f)
+    return zones_selected

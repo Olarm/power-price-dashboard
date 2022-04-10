@@ -1,0 +1,6 @@
+title = "state"
+
+[zones]
+all_zones = [ "NO_1", "NO_2", "NO_3", "NO_4", "NO_5",]
+default_zones = [ "NO_2", "NO_3",]
+chosen_zones = [ "NO_2", "NO_3",]
