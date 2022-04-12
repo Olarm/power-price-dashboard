@@ -1,5 +1,8 @@
 title = "state"
 
+[update]
+timestamp = "2022-04-12T20:00:00.000000+02:00"
+
 [zones]
 all_zones = [ "NO_1", "NO_2", "NO_3", "NO_4", "NO_5",]
 default_zones = [ "NO_2", "NO_3",]

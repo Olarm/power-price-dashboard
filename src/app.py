@@ -6,9 +6,10 @@ from dash import Dash, html, dcc, Input, Output
 import plotly.express as px
 import pandas as pd
 import datetime
+import dateutil
 import toml
 from collections import namedtuple
-from main import get_day_ahead
+from main import get_day_ahead, logger
 
 app = Dash(__name__,)
 server = app.server
@@ -44,7 +45,7 @@ app.layout = html.Div(style={}, children=[
                 zones.all_zones,
                 zones.default_zones,
                 id="zones"
-            )
+            ),
         ],
         style={'textAlign': 'center', 'display': 'inline-block', "width": "70vw"}
     ),
@@ -83,9 +84,22 @@ def update_now_line(interval):
     ts_prev = ts.replace(microsecond=0, second=0, minute=0)
     ts_next = ts_prev + datetime.timedelta(hours=1)
 
-    if ts.minute == 0 and ts.second == 0:
+    with open('state.toml', 'r') as f:
+        states = toml.load(f)
+        try:
+            prev_ts = pd.to_datetime(states["update"]["timestamp"])
+        except dateutil.parser._parser.ParserError:
+            logger.warning("Error parsing previous timestamp!")
+            prev_ts = ts - datetime.timedelta(hours=1, seconds=1)
+            pass
+
+    if prev_ts < ts - datetime.timedelta(hours=1):
+        logger.info("Updating data.")
         df = get_day_ahead(zones.all_zones)
         df.to_csv("zone_prices.csv")
+        states["update"]["timestamp"] = ts.isoformat()
+        with open('state.toml', 'w') as f:
+            toml.dump(states, f)
 
     temp_df = df[df["zone"].isin(zones.chosen_zones)]
 
